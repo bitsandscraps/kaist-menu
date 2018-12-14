@@ -1,4 +1,3 @@
-#!/home/wisrl/.local/share/virtualenvs/menu-xmCkVBHq/bin/python
 """ Retrieve menu from KAIST homepage """
 import datetime
 from enum import Enum, unique
