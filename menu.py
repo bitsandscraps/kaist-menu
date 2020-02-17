@@ -1,4 +1,5 @@
 """ Retrieve menu from KAIST homepage """
+import argparse
 import datetime
 from enum import Enum, unique
 from html.parser import HTMLParser
@@ -8,7 +9,13 @@ import sys
 from unicodedata import east_asian_width
 import requests
 
-N6_MENU_URL = 'http://www.kaist.ac.kr/_prog/fodlst/index.php?site_dvs_cd=kr&menu_dvs_cd=050303&dvs_cd=emp&stt_dt={}&site_dvs=' # pylint:disable=line-too-long
+CODE = { 'north': 'fclt',
+         'west': 'west',
+         'east': 'east1',
+         'east2': 'east2',
+         'n6': 'emp' }
+
+MENU_URL = 'https://www.kaist.ac.kr/kr/html/campus/053001.html?dvs_cd={code}&stt_dt={date}' # pylint:disable=line-too-long
 
 class MenuParser(HTMLParser):
     """ Class that Parses Menu """
@@ -42,7 +49,7 @@ class MenuParser(HTMLParser):
         if self._state is self.State.OUT_OF_TABLE:
             if tag == 'table':
                 for name, value in attrs:
-                    if name == 'class' and value == 'menuTb':
+                    if name == 'class' and value == 'table':
                         self._state = self.State.IN_TABLE
         elif self._state is self.State.TERMINATE:
             return
@@ -61,7 +68,7 @@ class MenuParser(HTMLParser):
                 or self._state is self.State.DINNER):
             if self._state not in self._data:
                 self._data[self._state] = []
-            data = data.strip()
+            data = ' '.join(data.split())
             if data:
                 if self._long_name:
                     # encountered " in name
@@ -87,7 +94,7 @@ def total_width(string):
     width = 0
     for char in string:
         result = east_asian_width(char)
-        if result in ('W', 'F', 'A'):
+        if result in 'WF':
             width += 2
         else:
             width += 1
@@ -133,9 +140,9 @@ def date_of_interest():
         now += datetime.timedelta(days=1)
     return now.date()
 
-def update_data(date):
+def update_data(code, date):
     """ Fetch menu data of `date` from server. """
-    response = requests.get(N6_MENU_URL.format(date.strftime('%Y-%m-%d')))
+    response = requests.get(MENU_URL.format(code=code, date=date.strftime('%Y-%m-%d')))
     if response.status_code != requests.codes.ok:  # pylint:disable=no-member
         response.raise_for_status()
     parser = MenuParser()
@@ -148,18 +155,26 @@ def compare_date(doi, doi_string):
     doi_ = datetime.datetime.strptime(doi_string, '%Y-%m-%d').date()
     return doi_ == doi
 
-def main(refresh):
+def build_argparser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-r', '--refresh', action='store_true', default=False)
+    parser.add_argument('target', default='n6', nargs='?')
+    return parser
+
+def main(args):
     """ main function for menu module """
-    cache_dir = os.path.dirname(os.path.abspath(__file__))
-    cache_path = os.path.join(cache_dir, 'cache')
+    target, refresh = args.target, args.refresh
+    cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cache')
+    os.makedirs(cache_dir, exist_ok=True)
+    cache_path = os.path.join(cache_dir, target)
     doi = date_of_interest()
     if refresh:
-        data = update_data(doi)
+        data = update_data(code=CODE[target], date=doi)
         print_menu(doi, *data)
         with open(cache_path, 'w') as cache:
             print_menu(doi, *data, cache)
     else:
-        with open(cache_path, 'r+') as cache:
+        with open(cache_path, 'a+') as cache:
             first = True
             for line in cache:
                 if first:
@@ -172,10 +187,10 @@ def main(refresh):
                 if not first:
                     return
             cache.truncate(0)
-            data = update_data(doi)
+            data = update_data(code=CODE[target], date=doi)
             print_menu(doi, *data)
             print_menu(doi, *data, cache)
 
 
 if __name__ == '__main__':
-    main('-r' in sys.argv)
+    main(build_argparser().parse_args())
