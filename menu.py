@@ -6,7 +6,9 @@ from html.parser import HTMLParser
 from itertools import zip_longest
 import os.path
 import sys
+import time
 from unicodedata import east_asian_width
+
 import requests
 
 CODE = { 'north': 'fclt',
@@ -142,13 +144,19 @@ def date_of_interest():
 
 def update_data(code, date):
     """ Fetch menu data of `date` from server. """
-    response = requests.get(MENU_URL.format(code=code, date=date.strftime('%Y-%m-%d')))
-    if response.status_code != requests.codes.ok:  # pylint:disable=no-member
-        response.raise_for_status()
-    parser = MenuParser()
-    response.encoding = 'utf8'
-    parser.feed(response.text)
-    return parser.data
+    while True:
+        response = requests.get(MENU_URL.format(code=code, date=date.strftime('%Y-%m-%d')))
+        if response.status_code != requests.codes.ok:  # pylint:disable=no-member
+            response.raise_for_status()
+        parser = MenuParser()
+        response.encoding = 'utf8'
+        parser.feed(response.text)
+        try:
+            data =  parser.data
+        except KeyError:
+            time.sleep(0.5)
+            continue
+        return data
 
 def compare_date(doi, doi_string):
     """ Compare doi(date object) and doi_string(string) """
@@ -176,6 +184,7 @@ def main(args):
     else:
         with open(cache_path, 'a+') as cache:
             first = True
+            cache.seek(0)
             for line in cache:
                 if first:
                     parsed = line.split()
