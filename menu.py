@@ -79,7 +79,7 @@ class MenuParser(HTMLParser):
                         self._long_name = False
                     self._data[self._state][-1] += ' ' + data
                 else:
-                    if data[0] == '"':
+                    if data[0] == '"' and data.count('"') == 1:
                         data = data[1:]
                         self._long_name = True
                     self._data[self._state].append(data)
