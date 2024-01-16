@@ -1,6 +1,3 @@
-[project.scripts]
-menu = "menu:main"
-
 [tool.black]
 line-length = 80
 
@@ -27,6 +24,9 @@ pylint = "^3.0.3"
 mypy = "^1.8.0"
 black = "^23.12.1"
 types-requests = "^2.31.0.20240106"
+
+[tool.poetry.scripts]
+menu = "menu:main"
 
 [build-system]
 requires = ["poetry-core"]
