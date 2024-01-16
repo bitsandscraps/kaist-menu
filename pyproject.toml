@@ -1,3 +1,6 @@
+[project.scripts]
+menu = "menu:main"
+
 [tool.black]
 line-length = 80
 
