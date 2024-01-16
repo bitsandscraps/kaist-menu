@@ -4,36 +4,36 @@ A command line tool that prints today's menu of KAIST cafeterias.
 
 ![Example Usage](example.png)
 
-In the previous screenshot, I've aliased `m` with `python menu.py`.
+In the screenshot, I've aliased `kaistmenu` with `m`.
 
-# Prerequisites
+# Installation
 
-Uses python3 and python library [requests](http://docs.python-requests.org/en/master/).
+The package can be installed via `pip` as usual.
 
 ``` shellsession
-$ pip3 install requests
+$ pip install --user git+https://github.com/bitsandscraps/kaist-menu
 ```
 
 # Usage
 
 ``` shellsession
-python menu.py
+kaistmenu
 ```
 
 If the cache is corrupted for some reason, you can refresh it by
 
 ``` shellsession
-python menu.py -r
+kaistmenu -r
 ```
 or
 ``` shellsession
-python menu.py --refresh
+kaistmenu --refresh
 ```
 
 If a code is given as a positional argument, it prints the menu of the
 corresponding cafeteria. Default is N6.
 ``` shellsession
-python menu.py north
+kaistmenu north
 ```
 ## List of Available Codes
 
