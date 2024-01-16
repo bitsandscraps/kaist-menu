@@ -1,0 +1,30 @@
+[tool.black]
+line-length = 80
+
+[tool.mypy]
+check_untyped_defs = true
+disable_error_code = 'attr-defined'
+no_implicit_optional = true
+show_error_codes = true
+warn_unused_configs = true
+
+[tool.poetry]
+name = "menu"
+version = "0.1.0"
+description = ""
+authors = ["bitsandscraps <17763502+bitsandscraps@users.noreply.github.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+requests = "^2.31.0"
+
+[tool.poetry.group.dev.dependencies]
+pylint = "^3.0.3"
+mypy = "^1.8.0"
+black = "^23.12.1"
+types-requests = "^2.31.0.20240106"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
