@@ -26,7 +26,7 @@ black = "^23.12.1"
 types-requests = "^2.31.0.20240106"
 
 [tool.poetry.scripts]
-menu = "menu:main"
+menu = "menu:main_cli"
 
 [build-system]
 requires = ["poetry-core"]

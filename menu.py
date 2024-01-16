@@ -230,5 +230,9 @@ def main(args):
             print_menu(doi, *data, file=cache)
 
 
-if __name__ == "__main__":
+def main_cli():
     main(build_argparser().parse_args())
+
+
+if __name__ == "__main__":
+    main_cli()
