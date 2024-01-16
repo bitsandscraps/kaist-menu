@@ -9,7 +9,7 @@ show_error_codes = true
 warn_unused_configs = true
 
 [tool.poetry]
-name = "menu"
+name = "kaist_menu"
 version = "0.1.0"
 description = ""
 authors = ["bitsandscraps <17763502+bitsandscraps@users.noreply.github.com>"]
@@ -26,7 +26,7 @@ black = "^23.12.1"
 types-requests = "^2.31.0.20240106"
 
 [tool.poetry.scripts]
-menu = "menu:main_cli"
+kaistmenu = "kaist_menu:main_cli"
 
 [build-system]
 requires = ["poetry-core"]
