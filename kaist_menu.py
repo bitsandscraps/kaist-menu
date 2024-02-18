@@ -12,11 +12,13 @@ from unicodedata import east_asian_width
 import requests
 
 CODE = {
-    "north": "fclt",
-    "west": "west",
     "east": "east1",
     "east2": "east2",
+    "hwaam": "hawam",
+    "munji": "icc",
+    "north": "fclt",
     "n6": "emp",
+    "west": "west",
 }
 
 MENU_URL = "https://www.kaist.ac.kr/kr/html/campus/053001.html?dvs_cd={code}&stt_dt={date}"  # pylint:disable=line-too-long
@@ -110,7 +112,7 @@ def build_argparser() -> argparse.ArgumentParser:
     """Create an ArgumentParser for the application"""
     parser = argparse.ArgumentParser()
     parser.add_argument("-r", "--refresh", action="store_true", default=False)
-    parser.add_argument("target", default="n6", nargs="?")
+    parser.add_argument("target", default="n6", nargs="?", choices=CODE.keys())
     return parser
 
 
