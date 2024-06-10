@@ -5,11 +5,12 @@ from enum import Enum, unique
 from html.parser import HTMLParser
 from itertools import zip_longest
 from pathlib import Path
-import sys
-import time
+from typing import NamedTuple
 from unicodedata import east_asian_width
 
 import requests
+from requests.adapters import HTTPAdapter, Retry
+import tomlkit
 
 CODE = {
     "east": "east1",
@@ -20,8 +21,14 @@ CODE = {
     "n6": "emp",
     "west": "west",
 }
-
+CONFIG_PATH = Path().home() / ".config" / "kaistmenu" / "kaistmenurc"
 MENU_URL = "https://www.kaist.ac.kr/kr/html/campus/053001.html?dvs_cd={code}&stt_dt={date}"  # pylint:disable=line-too-long
+
+
+class MenuData(NamedTuple):
+    breakfast: list[str]
+    lunch: list[str]
+    dinner: list[str]
 
 
 @unique
@@ -99,20 +106,37 @@ class MenuParser(HTMLParser):
                     self._data[self._state].append(data)
 
     @property
-    def data(self) -> tuple[list[str], list[str], list[str]]:
+    def data(self) -> MenuData:
         """Return a tuple of breakfast, lunch, and dinner menus"""
-        return (
-            self._data[MenuParserState.BREAKFAST],
-            self._data[MenuParserState.LUNCH],
-            self._data[MenuParserState.DINNER],
+        return MenuData(
+            breakfast=strip_strings(self._data[MenuParserState.BREAKFAST]),
+            lunch=strip_strings(self._data[MenuParserState.LUNCH]),
+            dinner=strip_strings(self._data[MenuParserState.DINNER]),
         )
 
 
 def build_argparser() -> argparse.ArgumentParser:
     """Create an ArgumentParser for the application"""
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as config_file:
+            config = tomlkit.load(config_file).value
+    except FileNotFoundError:
+        config = {}
     parser = argparse.ArgumentParser()
     parser.add_argument("-r", "--refresh", action="store_true", default=False)
-    parser.add_argument("target", default="n6", nargs="?", choices=CODE.keys())
+    parser.add_argument(
+        "-l", "--max-length", type=int, default=config.get("max_length", 100)
+    )
+    parser.add_argument(
+        "--max-retries", type=int, default=config.get("max_retries", 10)
+    )
+    parser.add_argument("--save-rc", action="store_true")
+    parser.add_argument(
+        "target",
+        default=config.get("target", "n6"),
+        nargs="?",
+        choices=CODE.keys(),
+    )
     return parser
 
 
@@ -122,7 +146,7 @@ def compare_date(doi, doi_string):
     return doi_ == doi
 
 
-def date_of_interest():
+def date_of_interest() -> datetime.date:
     """Return tommorow if it's past 8 pm, otherwise today"""
     now = datetime.datetime.today()
     if now.hour > 19:
@@ -142,12 +166,29 @@ def pad_string(string, padding, char=" ") -> str:
     return string + char * (padding - width)
 
 
-def print_menu(doi, breakfast, lunch, dinner, file=sys.stdout) -> None:
+def print_menu(data: MenuData, doi: datetime.date, *, max_length: int) -> None:
     """Print the menu in a tabular form"""
-    print(f"Date: {doi:%Y}-{doi:%m}-{doi:%d}", file=file)
-    breakfast_width = max_len(["breakfast"] + breakfast)
-    lunch_width = max_len(["lunch"] + lunch)
-    dinner_width = max_len(["dinner"] + dinner)
+    print(f"Date: {doi:%Y}-{doi:%m}-{doi:%d}")
+
+    breakfast_width = max_len(["BREAKFAST"] + data.breakfast)
+    lunch_width = max_len(["LUNCH"] + data.lunch)
+    dinner_width = max_len(["DINNER"] + data.dinner)
+
+    if breakfast_width + lunch_width + dinner_width > max_length:
+        length_list = sorted([breakfast_width, lunch_width, dinner_width])
+        if length_list[0] * 3 > max_length:
+            max_length = max_length // 3
+        elif length_list[0] + 2 * length_list[1] > max_length:
+            max_length = (max_length - length_list[0]) // 2
+        else:
+            max_length = max_length - length_list[0] - length_list[1]
+
+    breakfast = split_strings(data.breakfast, max_length)
+    lunch = split_strings(data.lunch, max_length)
+    dinner = split_strings(data.dinner, max_length)
+    breakfast_width = min(breakfast_width, max_length)
+    lunch_width = min(lunch_width, max_length)
+    dinner_width = min(dinner_width, max_length)
 
     def format_line(breakfast_, lunch_, dinner_):
         """Format a line in a table"""
@@ -162,12 +203,48 @@ def print_menu(doi, breakfast, lunch, dinner, file=sys.stdout) -> None:
         f"+-{pad_string('', lunch_width, '-')}-"
         f"+-{pad_string('', dinner_width, '-')}-+"
     )
-    print(seperator_str, file=file)
-    print(format_line("BREAKFAST", "LUNCH", "DINNER"), file=file)
-    print(seperator_str, file=file)
+    print(seperator_str)
+    print(format_line("BREAKFAST", "LUNCH", "DINNER"))
+    print(seperator_str)
     for dishes in zip_longest(breakfast, lunch, dinner, fillvalue=""):
-        print(format_line(*dishes), file=file)
-    print(seperator_str, file=file)
+        print(format_line(*dishes))
+    print(seperator_str)
+
+
+def read_cache(cache_path: Path, doi: datetime.date) -> MenuData:
+    with open(cache_path, "r", encoding="utf-8") as cache:
+        results = dict(tomlkit.load(cache))
+    if doi != results["date"]:
+        raise ValueError("Cache is outdated.")
+    return MenuData(
+        breakfast=results["breakfast"].value,  # type: ignore
+        lunch=results["lunch"].value,  # type: ignore
+        dinner=results["dinner"].value,  # type: ignore
+    )
+
+
+def split_strings(data: list[str], max_length: int) -> list[str]:
+    new_data = []
+    for string in data:
+        new_string = ""
+        length = 0
+        for char in string:
+            char_length = 2 if east_asian_width(char) in "WF" else 1
+            new_length = length + char_length
+            if new_length > max_length:
+                new_data.append(new_string)
+                new_string = char
+                length = char_length
+            else:
+                length = new_length
+                new_string += char
+        if new_string:
+            new_data.append(new_string)
+    return new_data
+
+
+def strip_strings(data: list[str]) -> list[str]:
+    return [string.strip() for string in data]
 
 
 def total_width(string) -> int:
@@ -182,54 +259,88 @@ def total_width(string) -> int:
     return width
 
 
-def update_data(code, date) -> tuple[list[str], list[str], list[str]]:
+def update_data(
+    code: str, date: datetime.date, max_retries: int = 10
+) -> MenuData:
     """Fetch menu data of `date` from server."""
-    while True:
-        response = requests.get(
-            MENU_URL.format(code=code, date=date.strftime("%Y-%m-%d")),
-            timeout=10,
+    session = requests.Session()
+    retries = Retry(backoff_factor=0.1, total=max_retries)
+    session.mount("https://", HTTPAdapter(max_retries=retries))
+    response = session.get(
+        MENU_URL.format(code=code, date=date.strftime("%Y-%m-%d")),
+        timeout=10,
+    )
+    response.raise_for_status()
+    parser = MenuParser()
+    response.encoding = "utf8"
+    parser.feed(response.text)
+    return parser.data
+
+
+def update_and_print(
+    cache_path: Path,
+    code: str,
+    doi: datetime.date,
+    max_length: int,
+    max_retries: int,
+):
+    data = update_data(code=code, date=doi, max_retries=max_retries)
+    print_menu(data, doi, max_length=max_length)
+    write_cache(cache_path, data, doi)
+
+
+def write_cache(cache_path: Path, data: MenuData, doi: datetime.date):
+    with open(cache_path, "w", encoding="utf-8") as cache:
+        tomlkit.dump(
+            {
+                "date": doi,
+                "breakfast": data.breakfast,
+                "lunch": data.lunch,
+                "dinner": data.dinner,
+            },
+            cache,
         )
-        response.raise_for_status()
-        parser = MenuParser()
-        response.encoding = "utf8"
-        parser.feed(response.text)
-        try:
-            data = parser.data
-        except KeyError:
-            time.sleep(0.5)
-            continue
-        return data
 
 
 def main(args):
     """main function for menu module"""
     cache_dir = Path().home() / ".cache" / "kaistmenu"
     cache_dir.mkdir(exist_ok=True)
-    cache_path = cache_dir / args.target
+    cache_path = cache_dir / f"{args.target}.toml"
     doi = date_of_interest()
     if args.refresh:
-        data = update_data(code=CODE[args.target], date=doi)
-        print_menu(doi, *data)
-        with open(cache_path, "w", encoding="utf-8") as cache:
-            print_menu(doi, *data, cache)
+        update_and_print(
+            cache_path=cache_path,
+            code=CODE[args.target],
+            doi=doi,
+            max_length=args.max_length,
+            max_retries=args.max_retries,
+        )
     else:
-        with open(cache_path, "a+", encoding="utf-8") as cache:
-            first = True
-            cache.seek(0)
-            for line in cache:
-                if first:
-                    parsed = line.split()
-                    if len(parsed) != 2 or not compare_date(doi, parsed[1]):
-                        break
-                    first = False
-                print(line.strip())
-            else:
-                if not first:
-                    return
-            cache.truncate(0)
-            data = update_data(code=CODE[args.target], date=doi)
-            print_menu(doi, *data)
-            print_menu(doi, *data, file=cache)
+        try:
+            data = read_cache(cache_path, doi)
+        except (FileNotFoundError, KeyError, ValueError):
+            print("Refreshing cache")
+            update_and_print(
+                cache_path=cache_path,
+                code=CODE[args.target],
+                doi=doi,
+                max_length=args.max_length,
+                max_retries=args.max_retries,
+            )
+        else:
+            print_menu(data, doi, max_length=args.max_length)
+    if args.save_rc:
+        CONFIG_PATH.parent.mkdir(exist_ok=True)
+        with open(CONFIG_PATH, "w", encoding="utf-8") as config_file:
+            tomlkit.dump(
+                {
+                    "max_length": args.max_length,
+                    "max_retries": args.max_retries,
+                    "target": args.target,
+                },
+                config_file,
+            )
 
 
 def main_cli():
