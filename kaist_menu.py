@@ -1,4 +1,5 @@
 """ Retrieve menu from KAIST homepage """
+
 import argparse
 import datetime
 from enum import Enum, unique
