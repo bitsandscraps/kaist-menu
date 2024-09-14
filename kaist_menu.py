@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import NamedTuple
 from unicodedata import east_asian_width
 
+import dateutil.parser
 import requests
 from requests.adapters import HTTPAdapter, Retry
 import tomlkit
@@ -124,6 +125,7 @@ def build_argparser() -> argparse.ArgumentParser:
     except FileNotFoundError:
         config = {}
     parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--date", default="")
     parser.add_argument("-r", "--refresh", action="store_true", default=False)
     parser.add_argument(
         "-l", "--max-length", type=int, default=config.get("max_length", 100)
@@ -147,12 +149,24 @@ def compare_date(doi, doi_string):
     return doi_ == doi
 
 
-def date_of_interest() -> datetime.date:
-    """Return tommorow if it's past 8 pm, otherwise today"""
-    now = datetime.datetime.today()
-    if now.hour > 19:
-        now += datetime.timedelta(days=1)
-    return now.date()
+def date_of_interest(date: str) -> datetime.date:
+    """Return the date of interest.
+
+    If date is not given, return tomorrow if it's past 8 pm, otherwise today.
+    If date is given as a number, add it to today's date,
+    e.g., +1 means tomorrow and +2 means the day after tomorrow.
+    Otherwise, parse the string as a date.
+    """
+    if not date:
+        now = datetime.datetime.today()
+        if now.hour > 19:
+            now += datetime.timedelta(days=1)
+        return now.date()
+    if date.startswith("+"):
+        now = datetime.datetime.today()
+        now += datetime.timedelta(days=int(date))
+        return now.date()
+    return dateutil.parser.parse(date)
 
 
 def max_len(strings) -> int:
@@ -284,10 +298,12 @@ def update_and_print(
     doi: datetime.date,
     max_length: int,
     max_retries: int,
+    rewrite_cache: bool = True,
 ):
     data = update_data(code=code, date=doi, max_retries=max_retries)
     print_menu(data, doi, max_length=max_length)
-    write_cache(cache_path, data, doi)
+    if rewrite_cache:
+        write_cache(cache_path, data, doi)
 
 
 def write_cache(cache_path: Path, data: MenuData, doi: datetime.date):
@@ -308,14 +324,15 @@ def main(args):
     cache_dir = Path().home() / ".cache" / "kaistmenu"
     cache_dir.mkdir(exist_ok=True)
     cache_path = cache_dir / f"{args.target}.toml"
-    doi = date_of_interest()
-    if args.refresh:
+    doi = date_of_interest(args.date)
+    if args.refresh or args.date:
         update_and_print(
             cache_path=cache_path,
             code=CODE[args.target],
             doi=doi,
             max_length=args.max_length,
             max_retries=args.max_retries,
+            rewrite_cache=args.date == "",
         )
     else:
         try:
