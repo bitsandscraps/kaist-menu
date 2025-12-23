@@ -166,7 +166,7 @@ def date_of_interest(date: str) -> datetime.date:
         now = datetime.datetime.today()
         now += datetime.timedelta(days=int(date))
         return now.date()
-    return dateutil.parser.parse(date)
+    return dateutil.parser.parse(date).date()
 
 
 def max_len(strings) -> int:
@@ -322,7 +322,7 @@ def write_cache(cache_path: Path, data: MenuData, doi: datetime.date):
 def main(args):
     """main function for menu module"""
     cache_dir = Path().home() / ".cache" / "kaistmenu"
-    cache_dir.mkdir(exist_ok=True)
+    cache_dir.mkdir(exist_ok=True, parents=True)
     cache_path = cache_dir / f"{args.target}.toml"
     doi = date_of_interest(args.date)
     if args.refresh or args.date:
@@ -349,7 +349,7 @@ def main(args):
         else:
             print_menu(data, doi, max_length=args.max_length)
     if args.save_rc:
-        CONFIG_PATH.parent.mkdir(exist_ok=True)
+        CONFIG_PATH.parent.mkdir(exist_ok=True, parents=True)
         with open(CONFIG_PATH, "w", encoding="utf-8") as config_file:
             tomlkit.dump(
                 {
