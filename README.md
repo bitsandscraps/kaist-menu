@@ -21,7 +21,6 @@ kaistmenu
 ```
 
 If the cache is corrupted for some reason, you can refresh it by
-
 ``` shellsession
 kaistmenu -r
 ```
@@ -35,6 +34,7 @@ corresponding cafeteria. Default is N6.
 ``` shellsession
 kaistmenu north
 ```
+
 ## List of Available Codes
 
 * 카이마루(북측 카페테리아): north
@@ -42,3 +42,5 @@ kaistmenu north
 * 동맛골(동측 학생식당): east
 * 동맛골(동측 교직원식당): east2
 * 교수회관: n6
+* 문지캠퍼스 구내 식당: munji
+* 화암 기숙사 식당: hwaam
