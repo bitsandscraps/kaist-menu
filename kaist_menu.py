@@ -154,7 +154,7 @@ def date_of_interest(date: str) -> datetime.date:
 
     If date is not given, return tomorrow if it's past 8 pm, otherwise today.
     If date is given as a number, add it to today's date,
-    e.g., +1 means tomorrow and +2 means the day after tomorrow.
+    e.g., +1 means tomorrow and -1 means yesterday.
     Otherwise, parse the string as a date.
     """
     if not date:
@@ -162,7 +162,7 @@ def date_of_interest(date: str) -> datetime.date:
         if now.hour > 19:
             now += datetime.timedelta(days=1)
         return now.date()
-    if date.startswith("+"):
+    if date.startswith("+") or date.startswith("-"):
         now = datetime.datetime.today()
         now += datetime.timedelta(days=int(date))
         return now.date()
